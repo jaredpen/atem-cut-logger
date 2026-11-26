@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'" />
+		<title>ATEM Cut Logger</title>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<header>
+			<div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>ATEM Cut Logger</div>
+			<div id="connPill" class="pill off">Not connected</div>
+			<div id="logPill" class="pill off">Not logging</div>
+			<button id="updPill" class="pill upd" hidden>Update available</button>
+			<div class="spacer"></div>
+			<div class="onair" title="What the switcher has on program and preview right now">
+				<span class="tally pgm">PGM</span><span id="pgmName" class="srcName">—</span>
+				<span class="tally pvw">PVW</span><span id="pvwName" class="srcName">—</span>
+			</div>
+			<div class="connect">
+				<input id="ip" placeholder="Switcher IP" spellcheck="false" />
+				<button id="connectBtn">Connect</button>
+				<button id="demoBtn" class="ghost demo" title="Try the app with a simulated switcher">Demo</button>
+			</div>
+			<button id="newSessionBtn" class="ghost" title="Close this log file and start a new one" disabled>New log</button>
+			<button id="openLogBtn" class="ghost" title="Look at a saved log on the timeline">Open log…</button>
+			<button id="settingsBtn" class="ghost icon" title="Settings">⚙︎</button>
+		</header>
+		<div id="viewBanner" hidden>
+			Viewing a saved log: <b id="viewName"></b><span class="muted" id="viewInfo"></span>
+			<span class="spacer"></span>
+			<span class="muted" id="viewLiveNote"></span>
+			<button id="backLive">Back to live</button>
+		</div>
+
+		<main>
+			<section id="left">
+				<div class="tlbar">
+					<span class="lbl">TIMELINE</span>
+					<button id="zoomOut" class="ghost small" title="Zoom out ( − )">−</button>
+					<button id="zoomIn" class="ghost small" title="Zoom in ( + )">+</button>
+					<button id="fitBtn" class="ghost small" title="Show the whole session ( F )">Fit</button>
+					<button id="liveBtn" class="small liveBtn on" title="Follow live ( L )"><span class="dot"></span>LIVE</button>
+					<span class="hint grow">Scroll or drag to go back in time · pinch or ⌘-scroll to zoom · double-click to jump to live · hover a clip for details</span>
+				</div>
+				<div id="tlWrap"><canvas id="tl"></canvas></div>
+
+				<div id="demoPanel" hidden>
+					<div class="dp-head">
+						<b>DEMO SWITCHER</b>
+						<span class="muted grow">Simulated ATEM · logged like the real thing</span>
+						<span class="spacer"></span>
+						<button id="recBtn" class="ghost small" title="Start/stop the switcher's own recorder">● Switcher REC</button>
+						<button id="dropBtn" class="ghost small" title="Simulate the network dropping for 4 seconds">Drop connection 4 s</button>
+						<label class="switch" title="Let the demo switch cameras by itself, like a director">
+							<input type="checkbox" id="dirOn" /><span class="track"><span class="knob"></span></span>
+							Auto director
+						</label>
+						<select id="dirSpeed" title="How often the auto director switches">
+							<option value="1,3">Busy (every 1–3 s)</option>
+							<option value="3,9" selected>Normal (3–9 s)</option>
+							<option value="8,20">Calm (8–20 s)</option>
+						</select>
+					</div>
+					<div class="dp-body">
+						<div class="buses">
+							<div class="bus"><span class="busLbl">PROGRAM</span><div id="pgmBus" class="btns"></div></div>
+							<div class="bus"><span class="busLbl">PREVIEW</span><div id="pvwBus" class="btns"></div></div>
+						</div>
+						<div class="trans">
+							<div class="styleBtns" id="styleBtns">
+								<button data-style="mix">MIX</button>
+								<button data-style="dip">DIP</button>
+								<button data-style="wipe">WIPE</button>
+								<button data-style="dve">DVE</button>
+								<button data-style="sting">STING</button>
+							</div>
+							<label class="rate">Rate <input id="rateIn" type="number" min="1" max="250" /> frames</label>
+							<div class="takes">
+								<button id="cutBtn" class="take cut" title="CUT (Space)">CUT</button>
+								<button id="autoBtn" class="take auto" title="AUTO (Enter)">AUTO</button>
+								<button id="ftbBtn" class="take ftb" title="Fade to black (B)">FTB</button>
+							</div>
+							<label class="tbarBox" title="Manual T-bar. Pull partway and back to test a cancelled transition.">
+								<span class="busLbl">T-BAR</span>
+								<input type="range" id="tbar" min="0" max="1000" value="0" />
+							</label>
+						</div>
+					</div>
+					<div class="hint keys">Keys: <kbd>1</kbd>–<kbd>8</kbd> preview · <kbd>⇧</kbd>+<kbd>1</kbd>–<kbd>8</kbd> straight to program · <kbd>Space</kbd> CUT · <kbd>Enter</kbd> AUTO · <kbd>B</kbd> fade to black</div>
+				</div>
+			</section>
+
+			<div id="splitter" title="Drag to resize"></div>
+
+			<aside id="console">
+				<div class="conhead">
+					<b>CONSOLE</b>
+					<span id="conCount" class="muted"></span>
+					<span class="spacer"></span>
+					<select id="conFilter" title="Show">
+						<option value="all">Everything</option>
+						<option value="switch">Switching only</option>
+						<option value="notes">Markers &amp; sync</option>
+						<option value="sys">System messages</option>
+					</select>
+					<button id="conCopy" class="ghost small" title="Copy the console to the clipboard">Copy</button>
+				</div>
+				<div id="conBody" tabindex="0"></div>
+				<button id="conJump" hidden>↓ New lines · jump to latest</button>
+				<div class="confoot">
+					<span class="prompt">›</span>
+					<input id="noteInput" placeholder="Type a note, press Enter to drop a marker (N)" spellcheck="false" />
+					<button id="syncBtn" class="syncBtn" title="Mark a clap / sync point (S)">SYNC</button>
+				</div>
+			</aside>
+		</main>
+
+		<div id="tooltip" hidden></div>
+
+		<dialog id="settings">
+			<form method="dialog">
+				<h2>Settings</h2>
+				<section>
+					<h3>Log files</h3>
+					<div class="row"><code id="logDir" class="path"></code></div>
+					<div class="row">
+						<button type="button" id="logDirChange" class="ghost">Change folder…</button>
+						<button type="button" id="logDirOpen" class="ghost">Show in Finder</button>
+					</div>
+					<p class="hint">A new log file starts every time you connect (or click New log). Each switch is saved the moment it happens, so nothing is lost if the Mac or app stops.</p>
+				</section>
+				<section>
+					<h3>Switcher</h3>
+					<label class="row">Log M/E
+						<select id="meSel">
+							<option value="1">M/E 1</option>
+							<option value="2">M/E 2</option>
+							<option value="3">M/E 3</option>
+							<option value="4">M/E 4</option>
+						</select>
+					</label>
+					<p class="hint">The Television Studio 4K8 has one M/E. Applies the next time you connect.</p>
+					<label class="row">Demo video format
+						<select id="demoFormat"></select>
+					</label>
+				</section>
+				<section>
+					<h3>App updates <span id="verLabel" class="muted"></span></h3>
+					<label class="row">GitHub repository <input id="updRepo" placeholder="owner/name" spellcheck="false" /></label>
+					<label class="row">Access token <input id="updToken" type="password" placeholder="only needed for a private repository" /></label>
+					<div class="row">
+						<button type="button" id="updCheck" class="ghost">Check for updates</button>
+						<button type="button" id="updInstall" class="primary" hidden>Install update</button>
+					</div>
+					<div id="updStatus" class="hint"></div>
+					<pre id="updNotes" hidden></pre>
+				</section>
+				<div class="row end"><button value="close">Done</button></div>
+			</form>
+		</dialog>
+
+		<script src="../src/timecode.js"></script>
+		<script src="model.js"></script>
+		<script src="timeline.js"></script>
+		<script src="app.js"></script>
+	</body>
+</html>

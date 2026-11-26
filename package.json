@@ -1,0 +1,51 @@
+{
+  "name": "atem-cut-logger",
+  "productName": "ATEM Cut Logger",
+  "version": "1.0.0",
+  "description": "Logs every cut and transition on a Blackmagic ATEM switcher, shown as a live editor-style timeline",
+  "main": "main.mjs",
+  "private": true,
+  "author": "ATEM Cut Logger",
+  "updateRepo": "jaredpen/atem-cut-logger",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "preview": "node scripts/preview-server.mjs",
+    "dist": "electron-builder --mac dir",
+    "install-app": "bash scripts/build-mac-app.sh"
+  },
+  "dependencies": {
+    "atem-connection": "^3.11.1"
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "local.atem-cut-logger",
+    "productName": "ATEM Cut Logger",
+    "directories": { "output": "dist" },
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "src/**/*",
+      "renderer/**/*",
+      "tools/**/*",
+      "build/icon.png",
+      "package.json",
+      "CHANGELOG.md"
+    ],
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.video",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "ATEM Cut Logger talks to your ATEM switcher on the local network to log cuts and transitions."
+      }
+    },
+    "npmRebuild": false
+  },
+  "license": "MIT"
+}
