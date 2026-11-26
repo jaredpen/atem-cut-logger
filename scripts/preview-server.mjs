@@ -12,6 +12,8 @@ import { createRequire } from 'node:module'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
 const { Engine } = require('../src/engine.js')
+const rx = require('../src/resolve-service.js')
+const mediaDir = process.env.PREVIEW_MEDIA || ''
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const port = Number(process.env.PORT || 5178)
 const logDir = process.env.LOG_DIR || path.join(os.tmpdir(), 'atem-cut-logger-preview-logs')
@@ -71,6 +73,30 @@ const calls = {
 		return { ok: true, file, name: path.basename(file), ...readLog(file) }
 	},
 	chooseLogDir: () => null,
+	resolveOpen: ([file]) => (file ? rx.openForResolve(file, { liveFile: engine.session?.file }) : null),
+	resolvePickLog: () => {
+		const r = calls.openLog()
+		return r.ok ? rx.openForResolve(r.file) : null
+	},
+	// Preview only: "Add files…" picks files in PREVIEW_MEDIA whose name contains CAM<n> for that camera.
+	resolveChooseFiles: ([title]) => {
+		if (!mediaDir) return []
+		const m = /Recordings from (.*)/.exec(title || '')
+		const ids = Object.entries(engine.info?.inputs || {}).filter(([, i]) => m && i.name === m[1]).map(([id]) => id)
+		const files = fs.readdirSync(mediaDir).filter((f) => ids.some((id) => f.toUpperCase().includes(`CAM${id}`)))
+		return rx.probeAll(files.map((f) => path.join(mediaDir, f)))
+	},
+	resolveProbe: ([paths]) => rx.probeAll(paths || []),
+	resolveAnalyze: ([file, config]) => rx.analyze(file, config),
+	resolveMake: ([file, config]) => {
+		try {
+			const r = rx.build(file, config)
+			return rx.writeTimeline(r, path.join(path.dirname(file), `${r.summary.name}.fcpxml`))
+		} catch (e) {
+			return { ok: false, reason: e.message }
+		}
+	},
+	pathForFile: () => null,
 	openLogDir: () => null,
 	appInfo: () => ({ version: pkg.version, updateRepo: pkg.updateRepo || '' }),
 	copyText: () => true,

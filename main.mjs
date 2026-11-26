@@ -11,6 +11,7 @@ import { createRequire } from 'node:module'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 const { Engine } = require('./src/engine.js')
+const rx = require('./src/resolve-service.js')
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
 
 let win = null
@@ -43,22 +44,7 @@ const send = (channel, data) => {
 }
 
 // ---------------------------------------------------------------- saved logs
-function readLog(file) {
-	const text = fs.readFileSync(file, 'utf8')
-	const rows = []
-	const lines = text.split(/\r?\n/).filter(Boolean)
-	lines.forEach((l, i) => {
-		try {
-			rows.push(JSON.parse(l))
-		} catch {
-			// The last line can be cut short if the Mac lost power mid-write; skip it.
-			if (i !== lines.length - 1) throw new Error(`Line ${i + 1} of the log is damaged.`)
-		}
-	})
-	const header = rows.find((r) => r.type === 'session')
-	if (!header) throw new Error("This file isn't an ATEM Cut Logger log.")
-	return { header, events: rows.filter((r) => r.type !== 'session').sort((a, b) => a.t - b.t) }
-}
+const readLog = rx.readLog
 
 async function openLog() {
 	const r = await dialog.showOpenDialog(win, {
@@ -243,6 +229,37 @@ app.whenReady().then(() => {
 	ipcMain.handle('log:openDir', () => {
 		fs.mkdirSync(engine.logDir, { recursive: true })
 		return shell.openPath(engine.logDir)
+	})
+	ipcMain.handle('resolve:open', (_e, file) => (file ? rx.openForResolve(file, { liveFile: engine.session?.file }) : null))
+	ipcMain.handle('resolve:pickLog', async () => {
+		const r = await dialog.showOpenDialog(win, { title: 'Choose a log', defaultPath: engine.logDir, properties: ['openFile'], filters: [{ name: 'Cut logs', extensions: ['jsonl'] }] })
+		return r.canceled || !r.filePaths[0] ? null : rx.openForResolve(r.filePaths[0], { liveFile: engine.session?.file })
+	})
+	ipcMain.handle('resolve:chooseFiles', async (_e, title) => {
+		const r = await dialog.showOpenDialog(win, {
+			title: title || 'Choose camera recordings',
+			properties: ['openFile', 'multiSelections'],
+			filters: [{ name: 'Video', extensions: [...rx.VIDEO_EXT].map((x) => x.slice(1)) }, { name: 'All files', extensions: ['*'] }],
+		})
+		return r.canceled ? [] : rx.probeAll(r.filePaths)
+	})
+	ipcMain.handle('resolve:probe', (_e, paths) => rx.probeAll(paths || []))
+	ipcMain.handle('resolve:analyze', (_e, { file, config }) => rx.analyze(file, config))
+	ipcMain.handle('resolve:make', async (_e, { file, config }) => {
+		let r
+		try {
+			r = rx.build(file, config)
+		} catch (e) {
+			return { ok: false, reason: e.message }
+		}
+		const safe = String(r.summary.name || 'timeline').replace(/[\\/:*?"<>|]/g, '-')
+		const s = await dialog.showSaveDialog(win, {
+			title: 'Save the Resolve timeline',
+			defaultPath: path.join(path.dirname(file), `${safe}.fcpxml`),
+			filters: [{ name: 'Final Cut Pro XML (for DaVinci Resolve)', extensions: ['fcpxml'] }],
+		})
+		if (s.canceled || !s.filePath) return { ok: false, canceled: true }
+		return rx.writeTimeline(r, s.filePath)
 	})
 	ipcMain.handle('app:info', () => ({ version: app.getVersion(), updateRepo: pkg.updateRepo || '' }))
 	ipcMain.handle('app:copy', (_e, text) => clipboard.writeText(String(text)))

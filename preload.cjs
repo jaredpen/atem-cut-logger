@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('api', {
 	connect: (ip, me, opts) => ipcRenderer.invoke('engine:connect', { ip, me, opts }),
@@ -26,5 +26,18 @@ contextBridge.exposeInMainWorld('api', {
 	onSession: (cb) => ipcRenderer.on('engine:session', (_e, s) => cb(s)),
 	onEvent: (cb) => ipcRenderer.on('engine:event', (_e, ev) => cb(ev)),
 	onSys: (cb) => ipcRenderer.on('engine:sys', (_e, s) => cb(s)),
+	resolveOpen: (file) => ipcRenderer.invoke('resolve:open', file),
+	resolvePickLog: () => ipcRenderer.invoke('resolve:pickLog'),
+	resolveChooseFiles: (title) => ipcRenderer.invoke('resolve:chooseFiles', title),
+	resolveProbe: (paths) => ipcRenderer.invoke('resolve:probe', paths),
+	resolveAnalyze: (file, config) => ipcRenderer.invoke('resolve:analyze', { file, config }),
+	resolveMake: (file, config) => ipcRenderer.invoke('resolve:make', { file, config }),
+	pathForFile: (f) => {
+		try {
+			return webUtils.getPathForFile(f)
+		} catch {
+			return null
+		}
+	},
 	onSessionEnd: (cb) => ipcRenderer.on('engine:sessionEnd', (_e, s) => cb(s)),
 })

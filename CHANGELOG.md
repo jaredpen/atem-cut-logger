@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+- **Make Resolve timeline**: cuts your camera recordings to match a log, for DaVinci Resolve (free or Studio). Import the result with File → Import → Timeline.
+  - Drag each camera's recording(s) onto it. Several files per camera are fine; each part of the show uses the file that covers it.
+  - The app reads each file's start timecode, frame rate and length itself, and shows whether the files cover all of that camera's on-air time.
+  - Line up by timecode, or by a clap (SYNC point) with a per-camera nudge.
+  - Dissolves where the switcher dissolved (or hard cuts only), audio cut with the picture or one camera's audio throughout, the whole log or only while the switcher recorded, gaps or "stay on the previous camera" for the media player and bars.
+  - Also saves a cut list (CSV), and remembers your choices for each log.
+- Open it from the timeline bar, from a saved log, or from the SAVED line in the console.
+
 ## 1.1.0
 - **Start logging** and **Stop logging** buttons. Connecting to the switcher no longer starts logging by itself, so you choose when a log begins and ends. (To go back to starting automatically, tick "Start logging automatically when I connect" in Settings.)
 - **New log file…** saves and closes the current log and carries on in a new file, for the next segment or show, without missing a switch.

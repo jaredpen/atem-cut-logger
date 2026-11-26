@@ -5,9 +5,10 @@ A Mac app that logs every **cut** and **transition** on a Blackmagic ATEM switch
 - **Timeline (left):** an editor-style view of the log. The **PROGRAM** track shows the cut as it went out. Below it is one track per camera, showing when that camera was on air, plus a track for other sources (media player, bars, black). Dissolves show as crossfades, and markers, sync points, the switcher's own recording and any connection drops appear on the ruler.
 - **Start / Stop logging:** you decide when a log begins and ends, and give each log a name. **New log file…** splits the show into separate files without missing a switch.
 - **Console (right):** every switch as a line of text, like a server log. Click a line to jump to that moment on the timeline. Type a note at the bottom to drop a marker, or press **SYNC** at a clap.
+- **Make Resolve timeline:** cuts your camera recordings to match a log, so the edit arrives in DaVinci Resolve already cut. Works with the free version of Resolve.
 - **Demo mode:** a simulated switcher with program/preview buses, CUT, AUTO, T-bar, fade to black, the switcher's recorder, dropped connections and an auto director. Use it to test the app without hardware.
 
-The timeline only shows the log; it never changes it. The log files are what a DaVinci Resolve plugin will use later to cut the camera recordings.
+The timeline only shows the log; it never changes it.
 
 ---
 
@@ -37,14 +38,14 @@ If you switch while connected but not logging, the console warns you that the sw
 
 If the network drops, the app keeps trying to reconnect. The gap shows as a red band on the timeline, and any switching done while disconnected is logged when it reconnects.
 
-### Where the log files are (and the Resolve plugin)
+### Where the log files are
 You don't need to save anything by hand. Each log is saved **automatically, as it happens**, to `Documents/ATEM Cut Logger Logs` (change it in ⚙ Settings), named by date, time and the name you gave it:
 
 ```
 Documents/ATEM Cut Logger Logs/2026-11-26 1930 Sunday Service.jsonl
 ```
 
-That `.jsonl` file **is** the file for the DaVinci Resolve plugin: in Resolve you'll pick it, and the plugin cuts the camera clips to match. To find a log, click **Show in Finder** on the SAVED line in the console, or click the logging pill in the header. Copy the file to your edit drive with the camera footage if you edit on another computer. **Open log…** shows any saved log on the timeline. Demo logs are saved too, with "(demo)" in the name.
+That `.jsonl` file is what **Make Resolve timeline** (below) uses. To find a log, click **Show in Finder** on the SAVED line in the console, or click the logging pill in the header. Copy the file to your edit drive with the camera footage if you edit on another computer. **Open log…** shows any saved log on the timeline. Demo logs are saved too, with "(demo)" in the name.
 
 ### Timeline controls
 | Do this | To |
@@ -68,9 +69,29 @@ Click **Demo**, then **● Start logging**. A demo switcher panel appears under 
 - **Auto director:** switches cameras by itself (cuts and transitions) so you can leave it running.
 - Keys: **1–8** preview, **⇧ + 1–8** straight to program, **Space** CUT, **Enter** AUTO, **B** fade to black.
 
-Demo logs are saved like real ones (with "(demo)" in the file name), so you can also use them to test the Resolve plugin later.
+Demo logs are saved like real ones (with "(demo)" in the file name), so you can also use them to try Make Resolve timeline.
 
-## 4. Updates
+## 4. Making the DaVinci Resolve timeline
+
+After the show, copy the camera recordings to your Mac or edit drive, then:
+
+1. Click **▶ Make Resolve timeline…** (in the timeline bar, on a saved log, or on the SAVED line in the console). Pick the log if asked.
+2. **Add each camera's recordings.** Drag the file(s) from Finder onto that camera, or click **Add files…**. If a camera made several files during the show, add them all. The app reads each file's start timecode, frame rate and length, and shows **✓ covers all its on-air time**, or warns you where footage is missing (for example a camera that started recording late).
+3. **Choose how to line them up:**
+   - **By timecode** (usual): the cameras/recorders had the same timecode as the switcher, for example all on time of day.
+   - **By a clap**: you pressed **SYNC** at a clap. For each camera, type the timecode where the clap is in its recording (find it in Resolve's viewer).
+   - If a camera is consistently a frame or two off, use its **Nudge**.
+4. **Options:** timeline name; audio (cut with the picture, or one camera's audio all the way through); dissolves or hard cuts; the whole log or only while the switcher was recording; for the media player, bars and black, leave a gap or stay on the previous camera.
+5. Click **Make timeline…** and save the `.fcpxml` file (next to the log by default). A cut list (`.csv`) is saved with it.
+6. In **DaVinci Resolve** (free or Studio): open your project → **File → Import → Timeline…** → choose the `.fcpxml` → leave **Automatically import source clips into media pool** ticked → **OK**. The timeline appears already cut, with dissolves where you dissolved.
+
+Your choices are remembered for each log, so you can come back, fix a file and make it again. Media player, bars and black come in as named gaps for you to fill in Resolve.
+
+**Files the app can read timecode from:** QuickTime (.mov) and MP4, which is what HyperDecks, ATEM ISO recorders and most cameras write. For other files (or files without timecode) type the start timecode into the file's **TC** box.
+
+> Why not a plugin inside Resolve? Blackmagic limits scripting in the free version of Resolve (from 21.1 it needs Studio), so the timeline is built here and imported instead, which works in both.
+
+## 5. Updates
 
 The app checks this GitHub repository each time it opens. When there's a newer version it shows **Update available** in the header.
 
@@ -82,7 +103,7 @@ You can't update while connected to a real switcher, and you shouldn't during a 
 
 **Publishing an update (for whoever maintains the code):** change the code, raise `"version"` in `package.json` (for example 1.0.0 → 1.1.0), add a section at the top of `CHANGELOG.md`, and push to the main branch. Every installed app will offer the update.
 
-## 5. Things to know
+## 6. Things to know
 - **Accuracy:** the switcher reports changes over the network within a few milliseconds. Times are stamped with the **switcher's own timecode** (asked for every 2 seconds), so they line up with camera files that share that timecode.
 - **What counts as a switch:** cuts, AUTO and T-bar transitions that change program, direct program-bus presses, and fade to/from black. Key-only transitions and a T-bar pulled back don't count.
 - This logs **one M/E** (M/E 1 by default; change it in Settings for bigger switchers).
@@ -91,9 +112,9 @@ You can't update while connected to a real switcher, and you shouldn't during a 
 ## Log format
 One JSON object per line. The first line describes the session (switcher, video format, input names). The rest are events: `initial`, `cut`, `transition` (start and end time, style, rate), `black_on`/`black_off`, `sync`, `marker`, `record_start`/`record_stop`, `disconnected`/`reconnected`, `end`. Each event has `t` (ms), `wall` (ISO time) and, when the switcher reports timecode, `tc` and `tcFrames`.
 
-`tools/export.js` turns a log plus camera files into an FCPXML timeline (command line, for now): `node tools/export.js <log.jsonl> --init`, fill in `cameras.json`, then `node tools/export.js <log.jsonl>`.
+`tools/export.js` is a command-line version of Make Resolve timeline: `node tools/export.js <log.jsonl> --init`, fill in the `.cameras.json` it writes, then `node tools/export.js <log.jsonl>`.
 
 ## Developer use
 - `npm install`, then `npm start` to run from source.
-- `npm test` runs the tracker, timeline-model and end-to-end demo tests.
+- `npm test` runs the tracker, timeline-model, demo and Resolve-timeline tests.
 - `npm run preview` runs the real engine and shows the window in a web browser at http://localhost:5178 (no Electron needed).

@@ -34,6 +34,7 @@
 			Viewing a saved log: <b id="viewName"></b><span class="muted" id="viewInfo"></span>
 			<span class="spacer"></span>
 			<span class="muted" id="viewLiveNote"></span>
+			<button id="viewResolve" class="resolveBtn">▶ Make Resolve timeline…</button>
 			<button id="backLive">Back to live</button>
 		</div>
 
@@ -46,6 +47,7 @@
 					<button id="fitBtn" class="ghost small" title="Show the whole session ( F )">Fit</button>
 					<button id="liveBtn" class="small liveBtn on" title="Follow live ( L )"><span class="dot"></span>LIVE</button>
 					<span class="hint grow">Scroll or drag to go back in time · pinch or ⌘-scroll to zoom · double-click to jump to live · hover a clip for details</span>
+					<button id="resolveBtn" class="resolveBtn small" title="Cut your camera recordings to match a log, for DaVinci Resolve">▶ Make Resolve timeline…</button>
 				</div>
 				<div id="tlWrap"><canvas id="tl"></canvas></div>
 
@@ -122,6 +124,43 @@
 
 		<div id="tooltip" hidden></div>
 
+		<dialog id="resolveDlg">
+			<form method="dialog">
+				<div class="rxHead">
+					<h2>Make a DaVinci Resolve timeline</h2>
+					<button value="close" class="ghost small" formnovalidate>Close</button>
+				</div>
+				<p class="hint">Cuts your camera recordings exactly where you switched. Works with the free version of Resolve: you bring the result in with <b>File → Import → Timeline</b>.</p>
+				<div class="rxLog"><span class="lbl">LOG</span> <b id="rxLogName"></b><span id="rxLogInfo" class="muted"></span><span class="spacer"></span><button type="button" id="rxPickLog" class="ghost small">Choose another log…</button></div>
+
+				<h3>1 · Camera recordings</h3>
+				<p class="hint">Drag each camera's file(s) from Finder onto that camera (or use <b>Add files…</b>). If a camera made several files during the show, add them all.</p>
+				<div id="rxCams"></div>
+
+				<h3>2 · Lining the recordings up</h3>
+				<label class="radio"><input type="radio" name="rxSync" value="timecode" /> <span><b>By timecode</b><span class="muted" id="rxTcHint"></span><br /><span class="hint">The cameras/recorders were set to the same timecode as the switcher (for example all on time of day). The usual choice.</span></span></label>
+				<label class="radio"><input type="radio" name="rxSync" value="clap" /> <span><b>By a clap</b><br /><span class="hint">You pressed SYNC at a clap during the show. For each camera, type the timecode where the clap is in its recording (look it up in Resolve's viewer).</span></span></label>
+				<div id="rxClapBox" class="rxClapBox" hidden>Use <select id="rxSyncMark"></select></div>
+
+				<h3>3 · Options</h3>
+				<div class="rxOpts">
+					<label>Timeline name <input id="rxTimeline" spellcheck="false" /></label>
+					<label>Audio <select id="rxAudio"></select></label>
+					<label>Transitions <select id="rxDissolves"><option value="yes">Dissolves where the switcher dissolved</option><option value="no">Hard cuts only</option></select></label>
+					<label>Length <select id="rxRange"><option value="all">The whole log</option><option value="recording">Only while the switcher was recording</option></select></label>
+					<label>Media player, bars, black… <select id="rxUnmapped"><option value="gap">Leave a gap (add graphics later)</option><option value="hold">Stay on the previous camera</option></select></label>
+				</div>
+
+				<div id="rxSummary" class="rxSummary"></div>
+				<ul id="rxWarnings" class="rxWarnings" hidden></ul>
+				<div id="rxResult" class="rxResult" hidden></div>
+				<div class="row end">
+					<button value="close" class="ghost" formnovalidate>Close</button>
+					<button type="button" id="rxMake" class="primary">Make timeline…</button>
+				</div>
+			</form>
+		</dialog>
+
 		<dialog id="nameDlg">
 			<form method="dialog">
 				<h2 id="nameTitle">Start logging</h2>
@@ -182,5 +221,6 @@
 		<script src="model.js"></script>
 		<script src="timeline.js"></script>
 		<script src="app.js"></script>
+		<script src="resolve.js"></script>
 	</body>
 </html>

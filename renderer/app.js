@@ -120,10 +120,14 @@
 		}
 		if (entry.saved) {
 			div.className = 'ln k-start c-sys c-notes c-switch'
-			div.innerHTML = `<span class="ts">${esc(timeLabel({ sys: { t: entry.saved.t } }))}</span><span class="tag">SAVED</span><span class="msg">${esc(entry.saved.name)}<span class="act">Show in Finder</span></span>`
-			div.querySelector('.act').onclick = (e) => {
+			div.innerHTML = `<span class="ts">${esc(timeLabel({ sys: { t: entry.saved.t } }))}</span><span class="tag">SAVED</span><span class="msg">${esc(entry.saved.name)}<span class="act" data-a="reveal">Show in Finder</span><span class="act" data-a="resolve">Make Resolve timeline</span></span>`
+			div.querySelector('[data-a=reveal]').onclick = (e) => {
 				e.stopPropagation()
 				api.revealFile(entry.saved.file)
+			}
+			div.querySelector('[data-a=resolve]').onclick = (e) => {
+				e.stopPropagation()
+				window.openResolve(entry.saved.file)
 			}
 			return div
 		}
@@ -412,6 +416,8 @@
 		applyState(state)
 	}
 	$('backLive').onclick = closeViewer
+	$('viewResolve').onclick = () => window.openResolve(viewing?.file)
+	$('resolveBtn').onclick = () => window.openResolve(viewing?.file || state.lastFile || state.session?.file || null)
 
 	// ---------------------------------------------------------------- timeline controls
 	$('zoomIn').onclick = () => timeline.zoom(1.6)
@@ -508,7 +514,7 @@
 	// ---------------------------------------------------------------- keyboard
 	document.addEventListener('keydown', (e) => {
 		const tag = e.target.tagName
-		if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || $('settings').open || e.metaKey || e.ctrlKey || e.altKey) return
+		if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || document.querySelector('dialog[open]') || e.metaKey || e.ctrlKey || e.altKey) return
 		const k = e.key
 		if (k === 's' || k === 'S') return api.sync()
 		if (k === 'n' || k === 'N') {

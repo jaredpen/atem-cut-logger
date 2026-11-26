@@ -1,7 +1,7 @@
 {
   "name": "atem-cut-logger",
   "productName": "ATEM Cut Logger",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Logs every cut and transition on a Blackmagic ATEM switcher, shown as a live editor-style timeline",
   "main": "main.mjs",
   "private": true,
