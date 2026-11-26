@@ -6,7 +6,7 @@
 	const $ = (id) => document.getElementById(id)
 	const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
-	const DEFAULT_SETTINGS = { ip: '', me: 1, logDir: '', demoFormat: '2160p29.97', consoleWidth: 440, conFilter: 'all', update: { repo: '', token: '' } }
+	const DEFAULT_SETTINGS = { ip: '', me: 1, logDir: '', demoFormat: '2160p29.97', consoleWidth: 440, conFilter: 'all', autoLog: false, lastName: '', update: { repo: '', token: '' } }
 	let S = { ...DEFAULT_SETTINGS }
 	let state = { mode: 'idle', conn: 'idle', inputs: {} }
 	const liveModel = new SessionModel()
@@ -116,6 +116,15 @@
 		if (entry.sep) {
 			div.className = 'ln sep c-switch c-notes c-sys'
 			div.textContent = entry.sep
+			return div
+		}
+		if (entry.saved) {
+			div.className = 'ln k-start c-sys c-notes c-switch'
+			div.innerHTML = `<span class="ts">${esc(timeLabel({ sys: { t: entry.saved.t } }))}</span><span class="tag">SAVED</span><span class="msg">${esc(entry.saved.name)}<span class="act">Show in Finder</span></span>`
+			div.querySelector('.act').onclick = (e) => {
+				e.stopPropagation()
+				api.revealFile(entry.saved.file)
+			}
 			return div
 		}
 		if (entry.sys) {
@@ -243,7 +252,20 @@
 		$('ip').disabled = atem
 		$('demoBtn').textContent = demo ? 'Stop demo' : 'Demo'
 		$('demoBtn').classList.toggle('on', demo)
-		$('newSessionBtn').disabled = s.conn !== 'connected'
+		const connected = s.conn === 'connected' || (s.conn === 'reconnecting' && !!s.session)
+		const logging = !!s.session
+		$('startLogBtn').hidden = logging
+		$('startLogBtn').disabled = s.conn !== 'connected'
+		$('startLogBtn').classList.toggle('attn', s.conn === 'connected' && !logging)
+		$('stopLogBtn').hidden = !logging
+		$('newLogBtn').hidden = !logging
+		$('newLogBtn').disabled = s.conn !== 'connected'
+		timeline.emptyText =
+			s.mode === 'idle'
+				? 'Connect to your switcher (top right), or click Demo to try it with a simulated switcher.'
+				: connected
+				? 'Connected. Click ● Start logging (top right) to record switches.'
+				: 'Waiting for the switcher…'
 		// on air
 		const live = s.live
 		const inputs = s.inputs || {}
@@ -256,7 +278,7 @@
 			if (!viewing) timeline.setInputs(inputs)
 			buildDemoButtons(inputs)
 		}
-		timeline.setLive(live, s.tcAnchor)
+		timeline.setLive(viewing ? null : live, s.tcAnchor)
 		if (!viewing && s.info) timeline.setFps(s.info.fps)
 		updateLogPill()
 		// demo panel
@@ -267,11 +289,16 @@
 
 	function updateLogPill() {
 		const s = state.session
-		if (!s) return setPill($('logPill'), 'Not logging', 'off')
+		if (!s) {
+			setPill($('logPill'), 'Not logging', 'off')
+			$('logPill').title = state.lastFile ? `Last log: ${state.lastFile}\nClick to show it in Finder` : 'Click to open the logs folder'
+			return
+		}
 		const dur = TC.fmtDuration(Date.now() - s.startedAt)
-		setPill($('logPill'), `LOGGING ${dur}`, 'rec')
-		$('logPill').title = `Saving to ${s.file}`
+		setPill($('logPill'), `LOGGING ${dur} · ${s.name}`, 'rec')
+		$('logPill').title = `Saving to ${s.file}\nClick to show it in Finder`
 	}
+	$('logPill').onclick = () => api.revealFile(state.session?.file || state.lastFile || null)
 	setInterval(updateLogPill, 1000)
 
 	$('connectBtn').onclick = async () => {
@@ -287,7 +314,7 @@
 		S.ip = ip
 		saveSettings()
 		if (viewing) closeViewer()
-		api.connect(ip, S.me)
+		api.connect(ip, S.me, { autoLog: S.autoLog, name: S.lastName })
 	}
 	$('ip').addEventListener('keydown', (e) => {
 		if (e.key === 'Enter') $('connectBtn').click()
@@ -296,19 +323,58 @@
 		if (state.mode === 'demo') return api.disconnect()
 		if (state.mode === 'atem' && !confirm('Stop logging the real switcher and start the demo instead?')) return
 		if (viewing) closeViewer()
-		api.startDemo({ format: S.demoFormat })
+		api.startDemo({ format: S.demoFormat, autoLog: S.autoLog, name: S.lastName || 'Demo' })
 	}
-	$('newSessionBtn').onclick = () => api.newSession()
+
+	// ---------------------------------------------------------------- start / stop logging
+	function nameDialog(isNew) {
+		const dlg = $('nameDlg')
+		$('nameTitle').textContent = isNew ? 'New log file' : 'Start logging'
+		$('nameIntro').textContent = isNew
+			? `"${state.session?.name}" is saved and closed, and switches go into a new file from now on.`
+			: 'Give this log a name, for example the show or segment.'
+		$('nameGo').textContent = isNew ? 'Save and start new file' : 'Start logging'
+		const def = state.mode === 'demo' ? S.lastName || 'Demo' : S.lastName || ''
+		$('nameInput').value = def
+		updateNamePreview()
+		dlg.returnValue = ''
+		dlg.showModal()
+		$('nameInput').select()
+		dlg.onclose = async () => {
+			if (dlg.returnValue !== 'go') return
+			const name = $('nameInput').value.trim()
+			S.lastName = name
+			saveSettings()
+			if (viewing) closeViewer()
+			const r = await api.startLogging(name)
+			if (r && !r.ok && r.reason !== 'not-connected') alert(r.reason)
+		}
+	}
+	function updateNamePreview() {
+		const d = new Date()
+		const pad = (x) => String(x).padStart(2, '0')
+		const name = $('nameInput').value.trim() || (state.mode === 'demo' ? 'Demo' : 'Show')
+		const dir = state.logDir || ''
+		const tag = state.mode === 'demo' && !/demo/i.test(name) ? ' (demo)' : ''
+		$('namePreview').textContent = `${dir ? dir + '/' : ''}${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())} ${name}${tag}.jsonl`
+	}
+	$('nameInput').addEventListener('input', updateNamePreview)
+	$('startLogBtn').onclick = () => nameDialog(false)
+	$('newLogBtn').onclick = () => nameDialog(true)
+	$('stopLogBtn').onclick = () => {
+		if (!confirm(`Stop logging "${state.session?.name}"? The file is saved and closed. Switches after this are not recorded until you start logging again.`)) return
+		api.stopLogging()
+	}
 
 	// ---------------------------------------------------------------- live data
 	function startSession(header) {
 		liveModel.reset(header)
-		const name = header.source === 'demo' ? 'demo session' : `${header.model}`
-		pushLive({ sep: `── new log · ${name} · ${new Date(header.t).toLocaleTimeString([], { hour12: false })} ──` })
+		pushLive({ sep: `── logging "${header.name || 'Show'}" · ${new Date(header.t).toLocaleTimeString([], { hour12: false })} ──` })
 		if (!viewing) {
 			timeline.setModel(liveModel, { isLive: true })
 			timeline.setFps(header.fps)
 			timeline.goLive()
+			$('liveBtn').disabled = false
 		}
 		updateCount()
 	}
@@ -336,11 +402,12 @@
 	function closeViewer() {
 		viewing = null
 		$('viewBanner').hidden = true
-		$('liveBtn').disabled = false
+		const live = !!state.session
+		$('liveBtn').disabled = !live
 		timeline.setInputs(state.inputs || {})
 		timeline.setFps(state.info?.fps || liveModel.header?.fps)
-		timeline.setModel(liveModel, { isLive: true })
-		timeline.goLive()
+		timeline.setModel(liveModel, { isLive: live })
+		if (live) timeline.goLive()
 		renderConsole(liveEntries)
 		applyState(state)
 	}
@@ -480,7 +547,12 @@
 		$('demoFormat').value = S.demoFormat
 		$('updRepo').value = S.update.repo
 		$('updToken').value = S.update.token
+		$('autoLog').checked = !!S.autoLog
 		$('settings').showModal()
+	}
+	$('autoLog').onchange = () => {
+		S.autoLog = $('autoLog').checked
+		saveSettings()
 	}
 	$('meSel').onchange = () => {
 		S.me = Number($('meSel').value)
@@ -577,6 +649,15 @@
 			if (!viewing) updateCount()
 		})
 		api.onSys((sys) => pushLive({ sys }))
+		api.onSessionEnd(({ file, header }) => {
+			const name = file.split(/[\\/]/).pop()
+			pushLive({ saved: { file, name, t: Date.now() } })
+			// The finished log stays on the timeline (no longer live) until the next one starts.
+			if (!viewing) {
+				timeline.setModel(liveModel, { isLive: false })
+				$('liveBtn').disabled = true
+			}
+		})
 
 		const s = await api.getState()
 		applyState(s)

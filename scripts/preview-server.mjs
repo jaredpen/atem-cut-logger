@@ -27,6 +27,7 @@ engine.on('state', (s) => broadcast('state', s))
 engine.on('session', (s) => broadcast('session', s))
 engine.on('event', (e) => broadcast('event', e))
 engine.on('sys', (s) => broadcast('sys', s))
+engine.on('sessionEnd', (s) => broadcast('sessionEnd', s))
 
 function readLog(file) {
 	const rows = fs
@@ -46,10 +47,13 @@ function readLog(file) {
 }
 
 const calls = {
-	connect: ([ip, me]) => engine.connectAtem(ip, me),
+	connect: ([ip, me, opts]) => engine.connectAtem(ip, me, opts || {}),
 	startDemo: ([o]) => engine.startDemo(o || {}),
 	disconnect: () => engine.stop(),
 	newSession: () => engine.newSession(),
+	startLogging: ([name]) => engine.startLogging(name),
+	stopLogging: () => engine.stopLogging(),
+	revealFile: () => null,
 	marker: ([t]) => engine.marker(t),
 	sync: () => engine.sync(),
 	demo: ([cmd, arg]) => engine.demoCommand(cmd, arg),
@@ -79,7 +83,7 @@ const calls = {
 const shim = `
 (function () {
 	const call = (name, ...args) => fetch('/__call/' + name, { method: 'POST', body: JSON.stringify(args) }).then((r) => r.json()).then((r) => r.result)
-	const subs = { state: [], session: [], event: [], sys: [] }
+	const subs = { state: [], session: [], event: [], sys: [], sessionEnd: [] }
 	const es = new EventSource('/__events')
 	es.onmessage = (m) => { const { type, data } = JSON.parse(m.data); for (const cb of subs[type] || []) cb(data) }
 	const api = {}
@@ -88,6 +92,8 @@ const shim = `
 	api.onSession = (cb) => subs.session.push(cb)
 	api.onEvent = (cb) => subs.event.push(cb)
 	api.onSys = (cb) => subs.sys.push(cb)
+	api.onSessionEnd = (cb) => subs.sessionEnd.push(cb)
+	window.prompt = (q, d) => d
 	window.api = api
 	window.confirm = () => true
 })()

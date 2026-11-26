@@ -46,8 +46,9 @@ class Engine extends EventEmitter {
 	}
 
 	// ------------------------------------------------------------------ public
-	async connectAtem(ip, me = 1) {
+	async connectAtem(ip, me = 1, { autoLog = false, name = '' } = {}) {
 		await this.stop()
+		this.autoLog = autoLog ? { name } : null
 		const { Atem, Enums } = require('atem-connection')
 		this.Enums = Enums
 		this.mode = 'atem'
@@ -111,8 +112,9 @@ class Engine extends EventEmitter {
 		}
 	}
 
-	async startDemo({ format } = {}) {
+	async startDemo({ format, autoLog = false, name = '' } = {}) {
 		await this.stop()
+		this.autoLog = autoLog ? { name } : null
 		this.mode = 'demo'
 		this.conn = 'connecting'
 		this.ip = ''
@@ -137,7 +139,7 @@ class Engine extends EventEmitter {
 			this._onDisconnected()
 		})
 		demo.on('demo', () => this._push())
-		this.sys('Starting the demo switcher. Everything is logged exactly as with a real switcher.')
+		this.sys('Starting the demo switcher. It is logged exactly like a real switcher.')
 		this._push()
 		demo.connect()
 	}
@@ -155,6 +157,8 @@ class Engine extends EventEmitter {
 		this.conn = 'idle'
 		this.live = null
 		this.tcAnchor = null
+		this.tracker = null
+		this.everConnected = false
 		if (demo) demo.disconnect()
 		if (atem) {
 			try {
@@ -168,25 +172,44 @@ class Engine extends EventEmitter {
 		this._push()
 	}
 
-	// Close the current log file and start a new one (same switcher, same state).
-	newSession() {
-		if (this.conn !== 'connected') return false
+	// Start writing a new log file. If one is open, it is closed first ("new log file").
+	startLogging(name = '') {
+		if (this.conn !== 'connected' || !this.live) {
+			this.sys('Connect to the switcher (or start the demo) before you start logging.', 'warn')
+			return { ok: false, reason: 'not-connected' }
+		}
 		this._endSession()
-		this._startSession()
+		this._startSession(name)
+		// A fresh tracker so the log opens with what is on air right now.
+		this.tracker = this._newTracker()
 		this.tracker.update(this.live, now())
-		return true
+		this._push()
+		return { ok: true, file: this.session.file }
+	}
+
+	stopLogging() {
+		if (!this.session) return { ok: false }
+		const file = this.session.file
+		this._endSession()
+		this._push()
+		return { ok: true, file }
+	}
+
+	// Kept for older callers: close this file and start another with the same name.
+	newSession() {
+		return this.startLogging(this.session?.header.name || '').ok
 	}
 
 	marker(text) {
 		text = String(text || '').trim()
 		if (!text) return false
-		if (!this.session) return this.sys('Not logging yet. Connect to a switcher or start the demo first.', 'warn'), false
+		if (!this.session) return this.sys('Not logging. Click Start logging first, then add markers.', 'warn'), false
 		this._write({ type: 'marker', t: now(), note: text })
 		return true
 	}
 
 	sync() {
-		if (!this.session) return this.sys('Not logging yet. Connect to a switcher or start the demo first.', 'warn'), false
+		if (!this.session) return this.sys('Not logging. Click Start logging first, then mark sync points.', 'warn'), false
 		this._write({ type: 'sync', t: now(), n: ++this.syncCount })
 		return true
 	}
@@ -245,8 +268,16 @@ class Engine extends EventEmitter {
 			live: this.live,
 			tcAnchor: this.tcAnchor && this.rate ? { ...this.tcAnchor, fps: this.rate.label, dropFrame: this.dropFrame } : null,
 			session: this.session
-				? { file: this.session.file, name: path.basename(this.session.file), startedAt: this.session.header.t, count: this.session.events.length, source: this.session.header.source }
+				? {
+						file: this.session.file,
+						fileName: path.basename(this.session.file),
+						name: this.session.header.name,
+						startedAt: this.session.header.t,
+						count: this.session.events.length,
+						source: this.session.header.source,
+				  }
 				: null,
+			lastFile: this.lastFile || null,
 			demo: this.demo ? this.demo.settings() : null,
 			logDir: this.logDir,
 		}
@@ -285,17 +316,38 @@ class Engine extends EventEmitter {
 		}
 		if ((this.atem || this.demo) !== owner) return
 		if (!this.tcAnchor) this.sys("The switcher didn't report timecode, so times are logged by this Mac's clock.", 'warn')
+		const firstConnect = !this.everConnected
+		this.everConnected = true
 		this.conn = 'connected'
-		if (first) {
-			this.sys(`Connected: ${info.model} · ${TC.prettyVideoMode(info.videoMode)}`)
-			this._startSession()
-		} else {
-			this._write({ type: 'reconnected', t: now() })
-			this.sys('Reconnected. Any switching that happened while disconnected is logged at this moment.', 'warn')
-		}
 		const snap = this.demo ? this.demo.snapshot() : snapshotFromAtemState(this.atem?.state, this.me)
 		if (!snap) this.sys(`This switcher has no M/E ${this.me + 1}. Choose M/E 1 in Settings.`, 'error')
+		if (firstConnect) {
+			this.sys(`Connected: ${info.model} · ${TC.prettyVideoMode(info.videoMode)}`)
+			this.live = snap
+			this.tracker = this._newTracker()
+			if (snap && this.autoLog) this.startLogging(this.autoLog.name)
+			else if (snap) this.sys('Not logging yet. Click ● Start logging when you are ready.', 'warn')
+		} else if (this.session) {
+			this._write({ type: 'reconnected', t: now() })
+			this.sys('Reconnected. Any switching that happened while disconnected is logged at this moment.', 'warn')
+		} else {
+			this.sys('Reconnected to the switcher.')
+		}
 		this._onChange(snap)
+	}
+
+	_newTracker() {
+		return new CutTracker((ev) => (this.session ? this._write(ev) : this._unlogged(ev)))
+	}
+
+	// Switching while connected but not logging: remind the operator, without flooding the console.
+	_unlogged(ev) {
+		if (ev.type !== 'cut' && ev.type !== 'transition') return
+		const t = now()
+		if (this.lastUnloggedWarn && t - this.lastUnloggedWarn < 30000) return
+		this.lastUnloggedWarn = t
+		const n = (id) => this.inputs[id]?.name || `Input ${id}`
+		this.sys(`Not logging: ${n(ev.from)} → ${n(ev.to)} was not saved. Click ● Start logging to record switches.`, 'warn')
 	}
 
 	_onChange(snap) {
@@ -306,9 +358,10 @@ class Engine extends EventEmitter {
 	}
 
 	_onDisconnected() {
-		if (this.conn === 'connected' && this.session) {
-			this._write({ type: 'disconnected', t: now() })
-			this.sys(this.mode === 'demo' ? 'Demo: connection dropped. Reconnecting…' : 'Lost the switcher. Reconnecting… (logging resumes automatically)', 'error')
+		if (this.conn === 'connected') {
+			if (this.session) this._write({ type: 'disconnected', t: now() })
+			const what = this.session ? ' (logging resumes automatically)' : ''
+			this.sys(this.mode === 'demo' ? `Demo: connection dropped. Reconnecting…${what}` : `Lost the switcher. Reconnecting…${what}`, 'error')
 		}
 		this.conn = 'reconnecting'
 		this._push()
@@ -333,19 +386,23 @@ class Engine extends EventEmitter {
 		return this.tcAnchor.frames + Math.round(TC.msToFrames(t - this.tcAnchor.ms, this.rate))
 	}
 
-	_startSession() {
+	_startSession(name = '') {
 		const info = this.info
 		const d = new Date()
 		const pad = (x) => String(x).padStart(2, '0')
-		const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+		const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}${pad(d.getMinutes())}`
 		const kind = this.mode === 'demo' ? 'demo' : 'atem'
+		name = String(name || '').trim() || (kind === 'demo' ? 'Demo' : 'Show')
+		const safe = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').slice(0, 80).trim() || 'Show'
+		const base = `${stamp} ${safe}${kind === 'demo' && !/demo/i.test(safe) ? ' (demo)' : ''}`
 		fs.mkdirSync(this.logDir, { recursive: true })
-		let file = path.join(this.logDir, `${kind}-session-${stamp}.jsonl`)
-		for (let i = 2; fs.existsSync(file); i++) file = path.join(this.logDir, `${kind}-session-${stamp}-${i}.jsonl`)
+		let file = path.join(this.logDir, `${base}.jsonl`)
+		for (let i = 2; fs.existsSync(file); i++) file = path.join(this.logDir, `${base} ${i}.jsonl`)
 		const inputNames = {}
 		for (const [id, inp] of Object.entries(this.inputs)) inputNames[id] = inp.name
 		const header = {
 			type: 'session',
+			name,
 			t: now(),
 			wall: new Date().toISOString(),
 			source: kind,
@@ -365,9 +422,9 @@ class Engine extends EventEmitter {
 		fs.writeSync(fd, JSON.stringify(header) + '\n')
 		this.session = { header, file, fd, events: [] }
 		this.syncCount = 0
-		this.tracker = new CutTracker((ev) => this._write(ev))
+		this.lastUnloggedWarn = 0
 		this.emit('session', { header, events: [], file })
-		this.sys(`Logging to ${file}`)
+		this.sys(`Logging started: "${name}" → ${file}`)
 	}
 
 	_endSession() {
@@ -379,9 +436,11 @@ class Engine extends EventEmitter {
 		} catch {
 			/* ignore */
 		}
-		this.sys(`Log saved: ${s.file} (${s.events.filter((e) => e.type === 'cut' || e.type === 'transition').length} switches)`)
+		const n = s.events.filter((e) => e.type === 'cut' || e.type === 'transition').length
+		this.sys(`Logging stopped. Saved "${s.header.name}" (${n} switch${n === 1 ? '' : 'es'}): ${s.file}`)
 		this.session = null
-		this.tracker = null
+		this.lastFile = s.file
+		this.emit('sessionEnd', { file: s.file, header: s.header })
 	}
 
 	_write(ev) {

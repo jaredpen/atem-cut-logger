@@ -116,6 +116,9 @@ test('demo session end to end: log file, timecode, and the Resolve exporter can 
 	await engine.startDemo({ format: '1080p25' })
 	const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 	await wait(900)
+	assert.equal(engine.session, null, 'connecting does not start logging by itself')
+	assert.equal(engine.startLogging('Sunday Service').ok, true)
+	assert.match(path.basename(engine.session.file), /^\d{4}-\d\d-\d\d \d{4} Sunday Service \(demo\)\.jsonl$/)
 	engine.demoCommand('rate', 5)
 	engine.demoCommand('preview', 3)
 	engine.demoCommand('cut')
@@ -137,6 +140,7 @@ test('demo session end to end: log file, timecode, and the Resolve exporter can 
 	const lines = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
 	assert.equal(lines[0].type, 'session')
 	assert.equal(lines[0].source, 'demo')
+	assert.equal(lines[0].name, 'Sunday Service')
 	assert.equal(lines[lines.length - 1].type, 'end')
 	const switches = lines.filter((e) => e.type === 'cut' || e.type === 'transition')
 	assert.deepEqual(
@@ -158,5 +162,49 @@ test('demo session end to end: log file, timecode, and the Resolve exporter can 
 	assert.equal(x.status, 0, x.stdout + x.stderr)
 	const xml = fs.readFileSync(file.replace(/\.jsonl$/, '.fcpxml'), 'utf8')
 	assert.match(xml, /<transition name="Cross Dissolve"/)
+	fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('start, stop and new log file', async () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acl-test-'))
+	const engine = new Engine({ logDir: dir, appVersion: 'test' })
+	const sys = []
+	engine.on('sys', (m) => sys.push(m))
+	const ended = []
+	engine.on('sessionEnd', (e) => ended.push(e.file))
+	const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+	assert.equal(engine.startLogging('x').ok, false, "can't log before connecting")
+	await engine.startDemo({ format: '1080p25' })
+	await wait(900)
+	// switching while not logging is not saved, but the operator is warned
+	engine.demoCommand('cut')
+	await wait(50)
+	assert.ok(sys.some((m) => /Not logging: .* was not saved/.test(m.msg)))
+	assert.equal(fs.readdirSync(dir).length, 0)
+
+	engine.startLogging('Part 1')
+	engine.demoCommand('cut')
+	await wait(50)
+	const first = engine.session.file
+	engine.startLogging('Part 2') // "New log file": closes Part 1, opens Part 2
+	engine.demoCommand('cut')
+	await wait(50)
+	const second = engine.session.file
+	engine.stopLogging()
+	assert.equal(engine.session, null)
+	assert.equal(engine.conn, 'connected', 'still connected after stopping')
+	assert.deepEqual(ended, [first, second])
+	for (const [f, n] of [[first, 'Part 1'], [second, 'Part 2']]) {
+		const rows = fs.readFileSync(f, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+		assert.equal(rows[0].name, n)
+		assert.equal(rows[1].type, 'initial', 'each file opens with what is on air')
+		assert.equal(rows.filter((r) => r.type === 'cut').length, 1)
+		assert.equal(rows[rows.length - 1].type, 'end')
+	}
+	// same name twice in the same minute doesn't overwrite
+	engine.startLogging('Part 1')
+	engine.stopLogging()
+	assert.equal(fs.readdirSync(dir).length, 3)
+	await engine.stop()
 	fs.rmSync(dir, { recursive: true, force: true })
 })

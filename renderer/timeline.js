@@ -682,7 +682,7 @@
 			else ctx.fillText('--:--:--:--', 10, 32)
 
 			const totals = this.model ? this.model.onAirTotals(this.now()) : {}
-			const live = this.isLive ? this.live : null
+			const live = this.live
 			for (const tr of this.tracks) {
 				const y = tr.y
 				const h = tr.h
@@ -737,11 +737,7 @@
 			ctx.fillStyle = '#8a92a3'
 			ctx.font = '14px -apple-system, system-ui, sans-serif'
 			ctx.textAlign = 'center'
-			ctx.fillText(
-				this.tracks.length > 2 ? 'Waiting for the switcher…' : 'Connect to your switcher (top right), or click Demo to try it with a simulated switcher.',
-				this.headerW + (this.w - this.headerW) / 2,
-				this.h / 2
-			)
+			ctx.fillText(this.emptyText || 'Connect to your switcher (top right), or click Demo to try it with a simulated switcher.', this.headerW + (this.w - this.headerW) / 2, this.h / 2)
 			ctx.textAlign = 'start'
 		}
 

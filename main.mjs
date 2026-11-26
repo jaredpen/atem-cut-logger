@@ -195,7 +195,7 @@ function createWindow() {
 	win.loadFile(path.join(__dirname, 'renderer', 'index.html'))
 	// Don't let a stray click close the window in the middle of logging a show.
 	win.on('close', (e) => {
-		if (quitting || engine.mode !== 'atem') return
+		if (quitting || !engine.session || engine.mode !== 'atem') return
 		const choice = dialog.showMessageBoxSync(win, {
 			type: 'warning',
 			buttons: ['Keep logging', 'Stop logging and quit'],
@@ -216,11 +216,18 @@ app.whenReady().then(() => {
 	engine.on('session', (s) => send('engine:session', s))
 	engine.on('event', (e) => send('engine:event', e))
 	engine.on('sys', (s) => send('engine:sys', s))
+	engine.on('sessionEnd', (s) => send('engine:sessionEnd', s))
 
-	ipcMain.handle('engine:connect', (_e, { ip, me }) => engine.connectAtem(String(ip), Number(me) || 1))
+	ipcMain.handle('engine:connect', (_e, { ip, me, opts }) => engine.connectAtem(String(ip), Number(me) || 1, opts || {}))
 	ipcMain.handle('engine:demo', (_e, o) => engine.startDemo(o || {}))
 	ipcMain.handle('engine:disconnect', () => engine.stop())
 	ipcMain.handle('engine:newSession', () => engine.newSession())
+	ipcMain.handle('engine:startLogging', (_e, name) => engine.startLogging(name))
+	ipcMain.handle('engine:stopLogging', () => engine.stopLogging())
+	ipcMain.handle('log:reveal', (_e, file) => {
+		if (file && fs.existsSync(file)) shell.showItemInFolder(file)
+		else shell.openPath(engine.logDir)
+	})
 	ipcMain.handle('engine:marker', (_e, text) => engine.marker(text))
 	ipcMain.handle('engine:sync', () => engine.sync())
 	ipcMain.handle('engine:demoCmd', (_e, { cmd, arg }) => engine.demoCommand(cmd, arg))

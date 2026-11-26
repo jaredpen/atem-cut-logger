@@ -10,7 +10,7 @@
 		<header>
 			<div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>ATEM Cut Logger</div>
 			<div id="connPill" class="pill off">Not connected</div>
-			<div id="logPill" class="pill off">Not logging</div>
+			<button id="logPill" class="pill off" title="Show the log file in Finder">Not logging</button>
 			<button id="updPill" class="pill upd" hidden>Update available</button>
 			<div class="spacer"></div>
 			<div class="onair" title="What the switcher has on program and preview right now">
@@ -22,7 +22,11 @@
 				<button id="connectBtn">Connect</button>
 				<button id="demoBtn" class="ghost demo" title="Try the app with a simulated switcher">Demo</button>
 			</div>
-			<button id="newSessionBtn" class="ghost" title="Close this log file and start a new one" disabled>New log</button>
+			<div class="logCtl">
+				<button id="startLogBtn" class="startLog" title="Start writing switches to a new log file" disabled>● Start logging</button>
+				<button id="newLogBtn" class="ghost" title="Save this log and start another file (for the next segment or show)" hidden>New log file…</button>
+				<button id="stopLogBtn" class="stopLog" title="Stop logging and save the file" hidden>■ Stop logging</button>
+			</div>
 			<button id="openLogBtn" class="ghost" title="Look at a saved log on the timeline">Open log…</button>
 			<button id="settingsBtn" class="ghost icon" title="Settings">⚙︎</button>
 		</header>
@@ -118,6 +122,19 @@
 
 		<div id="tooltip" hidden></div>
 
+		<dialog id="nameDlg">
+			<form method="dialog">
+				<h2 id="nameTitle">Start logging</h2>
+				<p class="hint" id="nameIntro">Give this log a name, for example the show or segment.</p>
+				<label class="row col">Log name <input id="nameInput" placeholder="e.g. Sunday Service" spellcheck="false" /></label>
+				<p class="hint">Saved as <code id="namePreview" class="inlinePath"></code></p>
+				<div class="row end">
+					<button value="cancel" class="ghost" formnovalidate>Cancel</button>
+					<button id="nameGo" value="go">Start logging</button>
+				</div>
+			</form>
+		</dialog>
+
 		<dialog id="settings">
 			<form method="dialog">
 				<h2>Settings</h2>
@@ -128,7 +145,8 @@
 						<button type="button" id="logDirChange" class="ghost">Change folder…</button>
 						<button type="button" id="logDirOpen" class="ghost">Show in Finder</button>
 					</div>
-					<p class="hint">A new log file starts every time you connect (or click New log). Each switch is saved the moment it happens, so nothing is lost if the Mac or app stops.</p>
+					<label class="row check"><input type="checkbox" id="autoLog" /> Start logging automatically when I connect</label>
+					<p class="hint">Each switch is saved the moment it happens, so nothing is lost if the Mac or app stops. These files are what the DaVinci Resolve plugin reads.</p>
 				</section>
 				<section>
 					<h3>Switcher</h3>

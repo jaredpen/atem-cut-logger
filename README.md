@@ -3,6 +3,7 @@
 A Mac app that logs every **cut** and **transition** on a Blackmagic ATEM switcher (built for the ATEM Television Studio 4K8). For each one it records the camera, the exact moment and the switcher's timecode.
 
 - **Timeline (left):** an editor-style view of the log. The **PROGRAM** track shows the cut as it went out. Below it is one track per camera, showing when that camera was on air, plus a track for other sources (media player, bars, black). Dissolves show as crossfades, and markers, sync points, the switcher's own recording and any connection drops appear on the ruler.
+- **Start / Stop logging:** you decide when a log begins and ends, and give each log a name. **New log file…** splits the show into separate files without missing a switch.
 - **Console (right):** every switch as a line of text, like a server log. Click a line to jump to that moment on the timeline. Type a note at the bottom to drop a marker, or press **SYNC** at a clap.
 - **Demo mode:** a simulated switcher with program/preview buses, CUT, AUTO, T-bar, fade to black, the switcher's recorder, dropped connections and an auto director. Use it to test the app without hardware.
 
@@ -24,16 +25,26 @@ You can delete the unzipped folder afterwards. **Updates come from GitHub inside
 ## 2. Logging a show
 
 1. Put the Mac on the same network as the switcher.
-2. Type the switcher's IP address in the top bar and click **Connect**. (The IP is in ATEM Setup, or on the switcher's LCD under network settings.)
-3. Logging starts as soon as it connects. Every switch is written to the log file the moment it happens, so nothing is lost if the app or the Mac stops.
+2. Type the switcher's IP address in the top bar and click **Connect**. (The IP is in ATEM Setup, or on the switcher's LCD under network settings.) The PGM/PVW tally in the header and on the camera tracks starts following the switcher, but nothing is saved yet.
+3. Click **● Start logging**, type a name for the log (for example *Sunday Service*) and press **Enter**. Every switch from now on is written to the file the moment it happens, so nothing is lost if the app or the Mac stops.
 4. During the show:
    - Press **S** (or **SYNC**) at a clap when you're syncing cameras by clap.
    - Press **N**, type a note and press **Enter** to drop a marker ("Q&A starts").
-5. Click **Disconnect** at the end. That closes the log file.
+   - To split the show into separate files (for example one per segment), click **New log file…** and give the next part a name. The current file is saved and the new one starts at the same instant.
+5. Click **■ Stop logging** at the end. The file is saved and closed; you stay connected, ready for the next one.
+
+If you switch while connected but not logging, the console warns you that the switch was not saved. Prefer logging to start the moment you connect? Tick **Start logging automatically when I connect** in ⚙ Settings.
 
 If the network drops, the app keeps trying to reconnect. The gap shows as a red band on the timeline, and any switching done while disconnected is logged when it reconnects.
 
-**Log files** go to `Documents/ATEM Cut Logger Logs` (you can change this in ⚙ Settings). Each connection starts a new file named like `atem-session-20261126-195300.jsonl`. **New log** starts a fresh file without disconnecting. **Open log…** shows any saved log on the timeline.
+### Where the log files are (and the Resolve plugin)
+You don't need to save anything by hand. Each log is saved **automatically, as it happens**, to `Documents/ATEM Cut Logger Logs` (change it in ⚙ Settings), named by date, time and the name you gave it:
+
+```
+Documents/ATEM Cut Logger Logs/2026-11-26 1930 Sunday Service.jsonl
+```
+
+That `.jsonl` file **is** the file for the DaVinci Resolve plugin: in Resolve you'll pick it, and the plugin cuts the camera clips to match. To find a log, click **Show in Finder** on the SAVED line in the console, or click the logging pill in the header. Copy the file to your edit drive with the camera footage if you edit on another computer. **Open log…** shows any saved log on the timeline. Demo logs are saved too, with "(demo)" in the name.
 
 ### Timeline controls
 | Do this | To |
@@ -47,7 +58,7 @@ If the network drops, the app keeps trying to reconnect. The gap shows as a red 
 
 ## 3. Demo mode
 
-Click **Demo**. A demo switcher panel appears under the timeline:
+Click **Demo**, then **● Start logging**. A demo switcher panel appears under the timeline:
 
 - **PROGRAM** row: a direct cut to that source. **PREVIEW** row: picks the next source.
 - **CUT**, **AUTO** (uses the selected MIX / DIP / WIPE / DVE / STING and the rate), **FTB**.
@@ -57,7 +68,7 @@ Click **Demo**. A demo switcher panel appears under the timeline:
 - **Auto director:** switches cameras by itself (cuts and transitions) so you can leave it running.
 - Keys: **1–8** preview, **⇧ + 1–8** straight to program, **Space** CUT, **Enter** AUTO, **B** fade to black.
 
-Demo sessions are saved as `demo-session-….jsonl`, so you can also use them to test the Resolve plugin later.
+Demo logs are saved like real ones (with "(demo)" in the file name), so you can also use them to test the Resolve plugin later.
 
 ## 4. Updates
 

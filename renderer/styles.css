@@ -59,6 +59,19 @@ header {
 .pill.rec { border-color: var(--red); color: #ffd0d1; font-variant-numeric: tabular-nums; }
 .pill.rec::before { content: '●'; color: var(--red); margin-right: 6px; animation: blink 1.4s infinite; }
 @keyframes blink { 50% { opacity: 0.25; } }
+.pill.rec, #logPill { cursor: pointer; }
+.logCtl { display: flex; gap: 6px; }
+.startLog { background: var(--red); font-weight: 700; }
+.startLog.attn:not(:disabled) { animation: attn 1.6s infinite; }
+@keyframes attn { 0%, 100% { box-shadow: 0 0 0 0 #e5484d00; } 50% { box-shadow: 0 0 0 5px #e5484d55; } }
+.stopLog { background: #2a2e38; border: 1px solid var(--red); color: #ffd0d1; font-weight: 700; }
+.ln .act { color: #7fb0ff; text-decoration: underline; cursor: pointer; margin-left: 8px; white-space: nowrap; }
+dialog label.row.col { flex-direction: column; align-items: stretch; gap: 6px; }
+dialog label.row.col input { width: 100%; font-size: 15px; padding: 8px 10px; }
+dialog label.row.check { justify-content: flex-start; gap: 8px; }
+dialog label.row.check input { width: auto; }
+.inlinePath { font-family: var(--mono); font-size: 11px; word-break: break-all; color: var(--text); }
+#nameDlg { width: min(480px, 92vw); }
 .pill.upd { border-color: var(--accent); color: #b9d1ff; cursor: pointer; }
 .onair { display: flex; align-items: center; gap: 6px; background: var(--card); border-radius: 8px; padding: 4px 8px; min-width: 0; }
 .tally { font-size: 10px; font-weight: 800; padding: 2px 5px; border-radius: 3px; color: #fff; letter-spacing: 0.4px; }

@@ -1,10 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('api', {
-	connect: (ip, me) => ipcRenderer.invoke('engine:connect', { ip, me }),
+	connect: (ip, me, opts) => ipcRenderer.invoke('engine:connect', { ip, me, opts }),
 	startDemo: (o) => ipcRenderer.invoke('engine:demo', o),
 	disconnect: () => ipcRenderer.invoke('engine:disconnect'),
 	newSession: () => ipcRenderer.invoke('engine:newSession'),
+	startLogging: (name) => ipcRenderer.invoke('engine:startLogging', name),
+	stopLogging: () => ipcRenderer.invoke('engine:stopLogging'),
+	revealFile: (file) => ipcRenderer.invoke('log:reveal', file),
 	marker: (text) => ipcRenderer.invoke('engine:marker', text),
 	sync: () => ipcRenderer.invoke('engine:sync'),
 	demo: (cmd, arg) => ipcRenderer.invoke('engine:demoCmd', { cmd, arg }),
@@ -23,4 +26,5 @@ contextBridge.exposeInMainWorld('api', {
 	onSession: (cb) => ipcRenderer.on('engine:session', (_e, s) => cb(s)),
 	onEvent: (cb) => ipcRenderer.on('engine:event', (_e, ev) => cb(ev)),
 	onSys: (cb) => ipcRenderer.on('engine:sys', (_e, s) => cb(s)),
+	onSessionEnd: (cb) => ipcRenderer.on('engine:sessionEnd', (_e, s) => cb(s)),
 })
